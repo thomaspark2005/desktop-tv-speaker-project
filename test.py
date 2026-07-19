@@ -40,9 +40,9 @@ while gameIsOn:
     ballrect = ballrect.move(speed)
     
     if ballrect.left < 0 or ballrect.right > width:
-        speed[0] = -random.randint(1, 10)
+        speed[0] = -speed[0]
     if ballrect.top < 0 or ballrect.bottom > height - 10:
-        speed[1] = -random.randint(1, 10)
+        speed[1] = -speed[1]
             
     screen.fill(color)
     screen.blit(ball, ballrect)
