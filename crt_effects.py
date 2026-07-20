@@ -6,7 +6,7 @@ Created on Sun Jul 19 18:44:08 2026
 @author: thomaspark
 """
 
-import pygame, sys
+import pygame, sys, random
 
 """Initalizing everything"""
 pygame.init()
@@ -24,8 +24,11 @@ pygame.display.set_caption("CRT Effect Tests")
 gameIcon = pygame.image.load("testdata/icon.png")
 pygame.display.set_icon(gameIcon)
 
-"""Size of screen"""
-size = width, monitor_height
+"""Size of app screen"""
+size = width, height
+screen = pygame.display.set_mode(size)
+
+"""Classes"""
 
 class afterImage(pygame.sprite.Sprite):
     def __init__(self, source):
@@ -45,7 +48,7 @@ class afterImage(pygame.sprite.Sprite):
         self.rect = source.rect.copy()     
         
         """How many ms the after image exists for"""
-        self.timeout = 150
+        self.timeout = 250
         
         """After image's transparency"""
         self.alpha = 255
@@ -56,7 +59,7 @@ class afterImage(pygame.sprite.Sprite):
         self.timeout -= dt
         
         """Subtract alpha level each frame, then set the alpha to it"""
-        self.alpha -= 30
+        self.alpha -= 16
         self.image.set_alpha(self.alpha)
         
         """Kill after image sprite when timer is over"""
@@ -93,18 +96,78 @@ class RalseiObj(pygame.sprite.Sprite):
             """How often, in ms, an after image is created"""
             self.afterImage_timeout = 25
             self.groups()[0].add(afterImage(self))
+            
+"""
+CRT Effect Functions
+
+Adapted/taken from https://dev.to/chrisgreening/simulating-simple-crt-and-glitch-effects-in-pygame-1mf1
+"""
+
+def apply_CRT_effects():
+    apply_scanlines()
+    apply_flicker()
+    apply_glow()
+    """apply_pixelation()"""
+    """add_glitch_effect(screen)"""
+    """add_color_separation(screen)"""
+    
+def apply_scanlines():
+    scanline_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+    
+    for y in range(0, height, 4):
+        pygame.draw.line(scanline_surface, (0, 0, 0, 60), (0, y), (width, y))
+
+    screen.blit(scanline_surface, (0, 0))
+
+def apply_pixelation():
+    pixelation = 4
+    width, height = screen.get_size()
+    small_surf = pygame.transform.scale(screen, (width // pixelation, height // pixelation))
+    screen.blit(pygame.transform.scale(small_surf, (width, height)), (0, 0))
+
+def apply_flicker():
+    if random.randint(0, 40) == 0:
+        flicker_surface = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        flicker_surface.fill((255, 255, 255, 5))
+        screen.blit(flicker_surface, (0, 0))
         
+def apply_glow():
+    glow_surf = pygame.transform.smoothscale(screen, (width // 4, height // 4))
+    glow_surf = pygame.transform.smoothscale(glow_surf, (width, height))
+    glow_surf.set_alpha(100)
+    screen.blit(glow_surf, (0, 0))
+    
+def add_glitch_effect(glitch_surface):
+    shift_amount = 40
+    if random.random() < 0.1:
+        y_start = random.randint(0, height - 20)
+        slice_height = random.randint(5, 20)
+        offset = random.randint(-shift_amount, shift_amount)
+
+        slice_area = pygame.Rect(0, y_start, width, slice_height)
+        slice_copy = glitch_surface.subsurface(slice_area).copy()
+        glitch_surface.blit(slice_copy, (offset, y_start))
+    
+def add_color_separation(glitch_surface):
+    color_shift = 2
+    if random.random() < 0.05:
+        for i in range(3):
+            x_offset = random.randint(-color_shift, color_shift)
+            y_offset = random.randint(-color_shift, color_shift)
+            color_shift_surface = glitch_surface.copy()
+            color_shift_surface.fill((0, 0, 0))
+            color_shift_surface.blit(glitch_surface, (x_offset, y_offset))
+            screen.blit(color_shift_surface, (0, 0), special_flags=pygame.BLEND_ADD)    
+    
 def main():
     
     """Speed of Ralsei"""
     speed = [5,5]
     
-    BGcolor = 20, 20, 20
+    BGcolor = 32, 32, 32
     
     deltaT, clock = 0, pygame.time.Clock()
-    
-    screen = pygame.display.set_mode(size)
-        
+            
     """Create Ralsei sprite"""
     sprites = pygame.sprite.LayeredUpdates(RalseiObj())
     
@@ -126,6 +189,7 @@ def main():
         """Update screen"""
         screen.fill(BGcolor)
         sprites.draw(screen)
+        apply_CRT_effects()
         pygame.display.flip()
         
         deltaT = clock.tick(60)
