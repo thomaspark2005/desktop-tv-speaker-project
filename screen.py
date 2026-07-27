@@ -8,7 +8,7 @@ This is the main script that animates the TV face
 @author: thomaspark2005
 """
 
-import pygame, sys, random
+import pygame, sys, random, math
 
 """Initalizing everything"""
 pygame.init()
@@ -73,19 +73,19 @@ class afterImage(pygame.sprite.Sprite):
         self.rect = source.rect.copy()     
         
         """How many ms the after image exists for"""
-        self.timeout = 100
+        self.timeout = 120
         
         """After image's initial transparency"""
         self.alpha = 255
         
     """Update function which runs each frame, needs input of dt"""
-    def update(self, speed, dt):
+    def update(self, dt):
         
         """Subtract internal clock from original time created"""
         self.timeout -= dt
         
         """Subtract alpha level each frame, then set the alpha to it"""
-        self.alpha -= 32
+        self.alpha -= 48
         self.image.set_alpha(self.alpha)
         
         """Kill sprite after image sprite when timer is over"""
@@ -188,7 +188,7 @@ class Eye(pygame.sprite.Sprite):
         self.prev_topleft = (0,0)
         
     """Update function which runs every frame"""
-    def update(self, speed, dt):
+    def update(self, speed, dt, afterImageGroup):
         
         """Bring down global variables"""
         global isBlinking
@@ -230,7 +230,7 @@ class Eye(pygame.sprite.Sprite):
             if self.afterImage_timeout <= 0:
                 """How often, in ms, an after image is created"""
                 self.afterImage_timeout = 25
-                self.groups()[0].add(afterImage(self))
+                afterImageGroup.add(afterImage(self))
         
       
 class Mouth(pygame.sprite.Sprite):
@@ -241,34 +241,42 @@ class Mouth(pygame.sprite.Sprite):
         """Sprite layer"""
         self._layer = 10
         
-        """Load mouth sprites"""
-        self.mouthSprite_D = pygame.image.load("sprites/mouth/mouth_D.png").convert_alpha()
+        """Load mouth sprites and scale down"""
+        self.mouthSprite_D =  pygame.transform.scale_by(pygame.image.load("sprites/mouth/mouth_D.png").convert_alpha(), 0.5)
         
         """Set initial sprite of mouth, D"""
         self.image = self.mouthSprite_D
-               
-        """Scale by 1/2"""
-        self.image = pygame.transform.scale_by(self.image, 0.5)
-        
+                       
         """Set the Rect correctly"""
         self.rect = self.image.get_rect()
                         
         """Initial timer for after images to start spawning"""
         self.afterImage_timeout = 0
         
+        self.absoluteRightOfRect= self.rect.left + self.rect.width
+        self.absoluteBottomOfRect = self.rect.top + self.rect.height
+        
     """Update function which runs every frame, needs dt"""
-    def update(self, speed, dt):
+    def update(self, speed, dt, afterImageGroup):
             
         """Create after images"""
         self.afterImage_timeout -= dt
         if self.afterImage_timeout <= 0:
             """How often, in ms, an after image is created"""
             self.afterImage_timeout = 25
-            self.groups()[0].add(afterImage(self))
+            afterImageGroup.add(afterImage(self))
     
 """Animation functions"""
 
 """Other functions"""
+
+def editDestination(destVector, xDest, yDest):
+    destVector = destVector.update(xDest, yDest)
+    return destVector
+
+def ensureFaceCorrectness(center, Left, Right, Mouth):
+    return
+    
     
 """
 CRT Effect Functions
@@ -352,6 +360,9 @@ def main():
     """Create sprite group"""
     sprites = pygame.sprite.LayeredUpdates()
     
+    """Create sprite group for after images"""
+    afterImages = pygame.sprite.LayeredUpdates()
+    
     """Create face sprites and add them to group"""
     LeftEye = Eye("Left")
     RightEye = Eye("Right")
@@ -364,6 +375,16 @@ def main():
     RealMouth.rect.center = screen.get_rect().center
     RealMouth.rect.top = 220
     
+    currentPosition = pygame.math.Vector2(RealMouth.rect.centerx, (LeftEye.rect.top + (RealMouth.rect.top + RealMouth.rect.height))/2)
+    
+    print("center of face is (" + str(currentPosition.x) + ", " + str(currentPosition.y) + ")")
+    
+    targetPosition = currentPosition
+    
+    leftEyeTopLeftDistance = (LeftEye.rect.topleft[0] - currentPosition.x, LeftEye.rect.topleft[1] - currentPosition.y)
+    rightEyeTopLeftDistance = (RightEye.rect.topleft[0] - currentPosition.x, RightEye.rect.topleft[1] - currentPosition.y)
+    mouthTopLeftDistance = (RealMouth.rect.topleft[0] - currentPosition.x, RealMouth.rect.topleft[1] - currentPosition.y)
+    
     """Game loop, run this code every frame"""
     gameIsOn = True
     
@@ -375,40 +396,56 @@ def main():
             if e.type == pygame.QUIT:
                 gameIsOn = False
                 
+            if e.type == pygame.KEYDOWN:
+                if e.key == pygame.K_SPACE:
+                    editDestination(targetPosition, random.randint(80, 640), random.randint(0, 480))
+                
         """Blink animation, run if random number roll succeeds, if face is not blinking, and if the face is in a neutral state"""
-        if (random.randint(0, 100) == 0) and (not isBlinking) and (faceState == 0):
+        """if (random.randint(0, 100) == 0) and (not isBlinking) and (faceState == 0):
             isBlinking = True
-            Eye.blink_timer = 0
+            Eye.blink_timer = 0"""
         
         """Update blink_elapsed out here"""
         if isBlinking:
             Eye.blink_elapsed += 1
             
         """Update all sprites"""
-        sprites.update(speed, deltaT)
+        sprites.update(speed, deltaT, afterImages)
+        afterImages.update(deltaT)
         
         """Check if blink_elapsed is greater than blink_duration"""
         if (Eye.blink_elapsed >= Eye.blink_duration) and isBlinking:
             """End blinking state"""
             isBlinking = False
             Eye.blink_elapsed = 0
-                
+        
+        currentPosition = currentPosition.move_towards(targetPosition, 10)
+        
+        LeftEye.rect.topleft = (currentPosition.x + leftEyeTopLeftDistance[0], currentPosition.y + leftEyeTopLeftDistance[1])
+        RightEye.rect.topleft = (currentPosition.x + rightEyeTopLeftDistance[0], currentPosition.y + rightEyeTopLeftDistance[1])
+        RealMouth.rect.topleft = (currentPosition.x + mouthTopLeftDistance[0], currentPosition.y + mouthTopLeftDistance[1])
+                  
         """Draw bg, sprites, and CRT effects to screen"""
         screen.fill(BGcolor)
+        afterImages.draw(screen)
         sprites.draw(screen)
         apply_CRT_effects()
-        
+                
         """4:3 boundary"""
         pygame.draw.rect(screen, "blue", (80, 0 , 640, 480), 1)
         
+        pygame.draw.circle(screen, "yellow", currentPosition, 10)
+        pygame.draw.circle(screen, "green", targetPosition, 10)
+
+        
         """Draw all sprites' rects for ease"""
-        """for sp in sprites:
-            pygame.draw.rect(screen, (255, 0, 0), sp.rect, 1) """
+        for sp in sprites:
+            pygame.draw.rect(screen, (255, 0, 0), sp.rect, 1)
+            pygame.draw.circle(screen, "purple", sp.rect.topleft, 10)
             
         pygame.display.flip()
         
         deltaT = clock.tick(60)
-        print(str(deltaT))
 
 """Run main"""                
 main()
