@@ -38,11 +38,20 @@ screen = pygame.display.set_mode(size)
 isBlinking = False
 afterImageFlag = True
 
+initialCenter = (0,0)
+
+"""Dictionary for distances between the center of the face and each of the components"""
+distDict = {}
+
+"""Dictionary for the distances between each eye sprite and the center"""
+eyeSpriteDistDict = {}
+
 """
 Face state variable:
 
 0 = normal, blinking
-1 = singing
+1 = moving, not blinking
+2 = singing
 
 """
 faceState = 0
@@ -235,8 +244,11 @@ class Eye(pygame.sprite.Sprite):
       
 class Mouth(pygame.sprite.Sprite):
     """Constructor"""
-    def __init__(self):
+    def __init__(self, objName):
         super().__init__()
+        
+        """Sprite name"""
+        self.name = objName
         
         """Sprite layer"""
         self._layer = 10
@@ -268,15 +280,22 @@ class Mouth(pygame.sprite.Sprite):
     
 """Animation functions"""
 
+"""
+Smoothstep easing function
+
+Formula: t^2 * (3 - 2 * t)
+"""
+def ease_in_and_out(t):
+    return t * t * (3 - 2 * t)
+
 """Other functions"""
 
-def editDestination(destVector, xDest, yDest):
-    destVector = destVector.update(xDest, yDest)
-    return destVector
-
-def ensureFaceCorrectness(center, Left, Right, Mouth):
-    return
+"""Calculates distance from a given faceSprite's rect's topleft to the center of the face, returns a tuple of distances in the x and y axes"""
+def calculateCenterDistance(faceSprite):
+    global initialCenter
     
+    dist = (faceSprite.rect.topleft[0] - initialCenter[0], faceSprite.rect.topleft[1] - initialCenter[1])
+    return dist
     
 """
 CRT Effect Functions
@@ -347,8 +366,13 @@ def main():
     """Bring down global variables"""
     global isBlinking        
     global faceState
+    global initialCenter
     
-    """Test speed"""
+    """Movement variables"""
+    movementDuration = 1.0
+    elapsedTime = 0.0
+    isMoving = False
+     
     speed = [0,0]
     
     """Color of the bckground"""
@@ -364,9 +388,9 @@ def main():
     afterImages = pygame.sprite.LayeredUpdates()
     
     """Create face sprites and add them to group"""
-    LeftEye = Eye("Left")
-    RightEye = Eye("Right")
-    RealMouth = Mouth()
+    LeftEye = Eye("LeftEye")
+    RightEye = Eye("RightEye")
+    RealMouth = Mouth("RealMouth")
     sprites.add(LeftEye, RightEye, RealMouth)
     
     """Place face sprites in initial positions"""
@@ -375,20 +399,37 @@ def main():
     RealMouth.rect.center = screen.get_rect().center
     RealMouth.rect.top = 220
     
+    """Set currentPosition of face as (center of the mouth, midpoint between LeftEye's top and RealMouth's bottom)"""
     currentPosition = pygame.math.Vector2(RealMouth.rect.centerx, (LeftEye.rect.top + (RealMouth.rect.top + RealMouth.rect.height))/2)
+        
+    """Set initialCenter to currentPosition coordinates"""
+    initialCenter = (currentPosition.x, currentPosition.y)
     
-    print("center of face is (" + str(currentPosition.x) + ", " + str(currentPosition.y) + ")")
+    """Set targetPosition as current as a default"""
+    targetPosition = pygame.math.Vector2(random.randint(80, 640), random.randint(0, 480))
+    startingPosition = currentPosition.copy()
     
-    targetPosition = currentPosition
-    
-    leftEyeTopLeftDistance = (LeftEye.rect.topleft[0] - currentPosition.x, LeftEye.rect.topleft[1] - currentPosition.y)
-    rightEyeTopLeftDistance = (RightEye.rect.topleft[0] - currentPosition.x, RightEye.rect.topleft[1] - currentPosition.y)
-    mouthTopLeftDistance = (RealMouth.rect.topleft[0] - currentPosition.x, RealMouth.rect.topleft[1] - currentPosition.y)
+    """
+    Constant distances from center to each of the parts, defined as:
+        xDistance = Part's rect's top left's x - center's x
+        yDistance = Part's rect's top left's y - center's y
+    """
+    for sp in sprites:
+        distDict.update({sp.name: calculateCenterDistance(sp)})
+        """If object is an eye, update eyeDictionary"""
+        if isinstance(sp, Eye):
+            eyeSpriteDistDict.update({str("Dot" + sp.name): distDict[sp.name]})
+            
+    # print(distDict)
+    # print(eyeSpriteDistDict)
     
     """Game loop, run this code every frame"""
     gameIsOn = True
     
     while gameIsOn:
+        
+        """Get delta T (time in ms between each frame)"""
+        deltaT = clock.tick(60)
         
         """Check if application is closed, close game if so"""
         events = pygame.event.get()
@@ -396,20 +437,24 @@ def main():
             if e.type == pygame.QUIT:
                 gameIsOn = False
                 
+            """If spacebar is pressed, randomly change the destination of the face"""
             if e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_SPACE:
-                    editDestination(targetPosition, random.randint(80, 640), random.randint(0, 480))
+                    targetPosition.update((random.randint(80, 640), random.randint(0, 480)))
+                    isMoving = True
+                    elapsedTime = 0.0
+                    startingPosition = currentPosition.copy()
                 
         """Blink animation, run if random number roll succeeds, if face is not blinking, and if the face is in a neutral state"""
-        """if (random.randint(0, 100) == 0) and (not isBlinking) and (faceState == 0):
-            isBlinking = True
-            Eye.blink_timer = 0"""
+        # if (random.randint(0, 100) == 0) and (not isBlinking) and (faceState == 0):
+        #     isBlinking = True
+        #     Eye.blink_timer = 0
         
-        """Update blink_elapsed out here"""
+        """Update blink_elapsed out here before sprite updates"""
         if isBlinking:
             Eye.blink_elapsed += 1
             
-        """Update all sprites"""
+        """Update all sprites, including after images"""
         sprites.update(speed, deltaT, afterImages)
         afterImages.update(deltaT)
         
@@ -417,14 +462,31 @@ def main():
         if (Eye.blink_elapsed >= Eye.blink_duration) and isBlinking:
             """End blinking state"""
             isBlinking = False
-            Eye.blink_elapsed = 0
+            Eye.blink_elapsed = 0 
         
-        currentPosition = currentPosition.move_towards(targetPosition, 10)
+        """Move center towards target"""
+        """Easing function"""
+        if isMoving:
+            """Divide deltaT by 1000 to get it in terms of seconds"""
+            elapsedTime += (deltaT / 1000.0)
+            
+            """Bound t to be in between 0 and 1"""
+            t = min(elapsedTime/movementDuration, 1.0)
+            
+            """Apply using the ease in and out function, return proper t value"""
+            smooth_t = ease_in_and_out(t)
+            
+            """Use lerp to move center to target with correct movement"""
+            currentPosition = startingPosition.lerp(targetPosition, smooth_t)
         
-        LeftEye.rect.topleft = (currentPosition.x + leftEyeTopLeftDistance[0], currentPosition.y + leftEyeTopLeftDistance[1])
-        RightEye.rect.topleft = (currentPosition.x + rightEyeTopLeftDistance[0], currentPosition.y + rightEyeTopLeftDistance[1])
-        RealMouth.rect.topleft = (currentPosition.x + mouthTopLeftDistance[0], currentPosition.y + mouthTopLeftDistance[1])
-                  
+            """When t is finished, stop movement"""
+            if t >= 1.0:
+                isMoving = False
+                    
+        """Update sprites to go with center"""
+        for sp in sprites:
+            sp.rect.topleft = (currentPosition.x + distDict[sp.name][0], currentPosition.y + distDict[sp.name][1])
+                              
         """Draw bg, sprites, and CRT effects to screen"""
         screen.fill(BGcolor)
         afterImages.draw(screen)
@@ -434,19 +496,19 @@ def main():
         """4:3 boundary"""
         pygame.draw.rect(screen, "blue", (80, 0 , 640, 480), 1)
         
+        """Vector2 visualized"""
         pygame.draw.circle(screen, "yellow", currentPosition, 10)
         pygame.draw.circle(screen, "green", targetPosition, 10)
+        pygame.draw.circle(screen, "red", startingPosition, 10)
 
-        
-        """Draw all sprites' rects for ease"""
-        for sp in sprites:
-            pygame.draw.rect(screen, (255, 0, 0), sp.rect, 1)
-            pygame.draw.circle(screen, "purple", sp.rect.topleft, 10)
+        # """Draw all sprites' rects for ease"""
+        # for sp in sprites:
+        #     pygame.draw.rect(screen, (255, 0, 0), sp.rect, 1)
+        #     pygame.draw.circle(screen, "purple", sp.rect.topleft, 10)
             
+        """Needed for display"""
         pygame.display.flip()
         
-        deltaT = clock.tick(60)
-
 """Run main"""                
 main()
 
