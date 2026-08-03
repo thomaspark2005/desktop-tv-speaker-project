@@ -42,7 +42,9 @@ screen = pygame.display.set_mode(size)
 
 # Font and surface for debug text
 font = pygame.font.Font(None, 20)
-text_surface = pygame.surface.Surface((0,0))
+text1 = pygame.surface.Surface((0,0))
+text2 = pygame.surface.Surface((0,0))
+text3 = pygame.surface.Surface((0,0))
 
 # Other global variables
 
@@ -199,8 +201,25 @@ class Eye(pygame.sprite.Sprite):
         # Store previous center of rect before sprite change
         self.prev_center = (0,0)
         
-    def update(self, dt, afterImageGroup, isBlinking):
-        """Update function which runs each frame.
+    def afterImgUpdate(self, dt, afterImageGroup):
+        """
+        Specfically updates the after images, so that the Face can correct the face sprites' positions first.
+        
+        :param dt: Change in time since last frame
+        :param afterImageGroup: Main loop's sprite group containing after images for each sprite
+        """
+        # Create after images if flag is set
+        if afterImageFlag:
+            # Subtract afterimage creation with delta t
+            self.afterImage_timeout -= dt
+            if self.afterImage_timeout <= 0:
+                # How often, in ms, an after image is created
+                self.afterImage_timeout = 25
+                afterImageGroup.add(afterImage(self))
+        
+    def update(self, isBlinking):
+        """
+        Update function which runs each frame.
         
         :param dt: Change in time since last frame
         :param afterImageGroup: Sprite group containing after images for each sprite
@@ -227,7 +246,8 @@ class Eye(pygame.sprite.Sprite):
                     self.rect = self.image.get_rect()
                     
                     # Position eyes if depending on which one they are
-                    # These functions use the centers of the previous rects to be more adaptive 
+                    # These functions use the centers of the previous rects to be more adaptive
+                    # TODO: This will not work because the Face object overrides this change.
                     if self.name == "LeftEye":
                         self.rect.center = (self.prev_center[0] - 20, self.prev_center[1])
                     else:
@@ -235,18 +255,7 @@ class Eye(pygame.sprite.Sprite):
             else:
                 # When blinking duration has ran through, set image to previous eye sprite and previous rect
                 self.image = self.prev_eye_sprite
-                self.rect = self.image.get_rect()
-                # Reset position of eyes
-                self.rect.center = self.prev_center
-                    
-        # Create after images if flag is set
-        if afterImageFlag:
-            # Subtract afterimage creation with delta t
-            self.afterImage_timeout -= dt
-            if self.afterImage_timeout <= 0:
-                # How often, in ms, an after image is created
-                self.afterImage_timeout = 25
-                afterImageGroup.add(afterImage(self))
+                self.rect = self.image.get_rect(center=self.prev_center)
       
 class Mouth(pygame.sprite.Sprite):
     """Holds logic for mouth, including sprites and necessary updates."""
@@ -281,19 +290,30 @@ class Mouth(pygame.sprite.Sprite):
         self.absoluteRightOfRect= self.rect.left + self.rect.width
         self.absoluteBottomOfRect = self.rect.top + self.rect.height
         
-    def update(self, dt, afterImageGroup, isBlinking):
+    def afterImgUpdate(self, dt, afterImageGroup):
+        """
+        Specfically updates the after images, so that the Face can correct the face sprites' positions first.
+        
+        :param dt: Change in time since last frame
+        :param afterImageGroup: Main loop's sprite group containing after images for each sprite
+        """
+        # Create after images if flag is set
+        if afterImageFlag:
+            # Subtract afterimage creation with delta t
+            self.afterImage_timeout -= dt
+            if self.afterImage_timeout <= 0:
+                # How often, in ms, an after image is created
+                self.afterImage_timeout = 25
+                afterImageGroup.add(afterImage(self))
+        
+    def update(self, isBlinking):
         """Update function which runs each frame.
         
         :param dt: Change in time since last frame
         :param afterImageGroup: Sprite group containing after images for each sprite
         :param isBlinking: Unused here
         """
-        # Create after images
-        self.afterImage_timeout -= dt
-        if self.afterImage_timeout <= 0:
-            # How often, in ms, an after image is created
-            self.afterImage_timeout = 25
-            afterImageGroup.add(afterImage(self))
+        # print("Erm... what the scallop???")
     
 class Face():
     """
@@ -362,7 +382,7 @@ class Face():
         """
         Calculates distance from a given faceSprite's rect's center to the center of the face, returns a tuple of distances in the x and y axes.
         
-        This should be only run once (during initialization)!
+        This should be run during initialization and whenever a face part's distance changes!
         """
         # Subtract the sprite's center x from the face's center x, same for y's
         dist = (faceSprite.rect.center[0] - self.currPos[0], faceSprite.rect.center[1] - self.currPos[1])
@@ -391,7 +411,7 @@ class Face():
         :param yDest: Target y-coordinate
         :param duration: Time, in seconds, movement will occur over
         """
-        global text_surface
+        global text1
         
         self.targetPos.update(xDest, yDest)
         self.startMoving()
@@ -399,7 +419,7 @@ class Face():
         
         # TODO: Remove this or comment out
         # Print debugging info to screen
-        text_surface = font.render("Going to (" + str(xDest) + ", " + str(yDest) + ") in " + str(duration) + " seconds.", True, "white")
+        text1 = font.render("Going to (" + str(xDest) + ", " + str(yDest) + ") in " + str(duration) + " seconds.", True, "white")
         
     def drawPositions(self):
         """Draws the current, previous, and destination Vector2s associated with this face object."""
@@ -419,16 +439,16 @@ class Face():
         :param afterImageSpriteGroup: Sprite group containing after images for each sprite
         """
         # Blink animation, run if random number roll succeeds, if face is not blinking, and if the face is in a neutral state
-        # if (random.randint(0, 100) == 0) and (not self.isBlinking) and (self.faceState == 0):
-        #     self.isBlinking = True
-        #     Eye.blink_timer = 0
+        if (random.randint(0, 100) == 0) and (not self.isBlinking) and (self.faceState == 0):
+            self.isBlinking = True
+            Eye.blink_timer = 0
             
         # Update blink_elapsed out here before sprite updates
         if self.isBlinking:
             Eye.blink_elapsed += 1
             
-        # Let all face sprites update
-        self.faceSprites.update(dt, afterImageSpriteGroup, self.isBlinking)
+        # Let all face sprites update 
+        self.faceSprites.update(self.isBlinking)
         
         # Check if blink_elapsed is greater than blink_duration
         if (Eye.blink_elapsed >= Eye.blink_duration) and self.isBlinking:
@@ -454,11 +474,17 @@ class Face():
             if t >= 1.0:
                 self.isMoving = False
                 
-            # Update sprites to go with center
+            # Update sprites' positions to go with center
             # TODO: Make sure this accounts for different face sprite changes, like blinking
             for sp in self.faceSprites:
-                sp.rect.center = (self.currPos.x + self.distDict[sp.name][0], self.currPos.y + self.distDict[sp.name][1])    
-            
+                # Update the sprite's rect's center to be a constant distance as defined in the distDict
+                sp.rect.center = (self.currPos.x + self.distDict[sp.name][0], self.currPos.y + self.distDict[sp.name][1])
+                    
+        # Let all face sprites update their after images after enforcing their positions
+        for sp in self.faceSprites:
+            sp.afterImgUpdate(dt, afterImageSpriteGroup)
+                  
+                
 # =============================================================================
 # Animation functions
 # =============================================================================
@@ -554,14 +580,14 @@ def debugVisuals(FaceObj, spriteGroup, afterImageGroup):
     #     pygame.draw.circle(screen, "purple", sp.rect.center, 10)
         
     # for sp in afterImageGroup:
-    #     pygame.draw.rect(screen, (139,0,0), sp.rect, 1)
+    #     pygame.draw.rect(screen, (0,139,0), sp.rect, 1)
     
     # pygame.draw.circle(screen, (192, 255, 0), (screen.get_rect().centerx, 220), 10)
     # pygame.draw.circle(screen, (192, 255, 0), (screen.get_rect().centerx, 260), 10)
                    
     """Print debugging info"""
-    screen.blit(text_surface, (0, 0))
-
+    screen.blit(text1, (0, 0))
+        
 # =============================================================================
 # Main()
 # =============================================================================
@@ -584,6 +610,7 @@ def main():
     # Game loop, run this code every frame
     gameIsOn = True
     while gameIsOn:
+        
         # Get delta T (time in ms between each frame)
         deltaT = clock.tick(60)
 
@@ -604,8 +631,12 @@ def main():
         # Attract mode ideas
         if not MainFace.isMoving:
             # Random, slow movement
-            MainFace.moveTo(random.randint(160, 540), random.randint(80, 400), random.uniform(1.0, 5.0))
+            # MainFace.moveTo(random.randint(160, 540), random.randint(80, 400), random.uniform(1.0, 5.0))
             # Sinusoidal movement
+            if(MainFace.currPos.x <= 400):
+                MainFace.moveTo(600, 300, 1.0)
+            else:
+                MainFace.moveTo(200, 300, 1.0)
         
         # Update all sprites, including after images
         MainFace.update(deltaT, afterImages)
@@ -619,7 +650,7 @@ def main():
                 
         # Debugging features
         debugVisuals(Face, sprites, afterImages)
-        
+                
         # Needed for display
         pygame.display.flip()
                 
