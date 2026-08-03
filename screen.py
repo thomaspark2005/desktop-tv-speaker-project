@@ -201,6 +201,9 @@ class Eye(pygame.sprite.Sprite):
         # Store previous center of rect before sprite change
         self.prev_center = (0,0)
         
+        # Used when edits to the normal center of the sprite are needed (i.e. when the sprite image is changed)
+        self.changeFromCenter = (0,0)
+        
     def afterImgUpdate(self, dt, afterImageGroup):
         """
         Specfically updates the after images, so that the Face can correct the face sprites' positions first.
@@ -242,21 +245,24 @@ class Eye(pygame.sprite.Sprite):
                     # Set image to blinking eye
                     self.image = Eye.eyeSprite_closedDown
                     
-                    # Reset rect
-                    self.rect = self.image.get_rect()
+                    # Reset rect, position doesn't really matter since it will be corrected
+                    self.rect = self.image.get_rect(center=self.prev_center)
                     
                     # Position eyes if depending on which one they are
-                    # These functions use the centers of the previous rects to be more adaptive
-                    # TODO: This will not work because the Face object overrides this change.
+                    # Change the position the eyes in relation to the usual center calculated at Face initialization
                     if self.name == "LeftEye":
-                        self.rect.center = (self.prev_center[0] - 20, self.prev_center[1])
+                        self.changeFromCenter = (-20, 0)
                     else:
-                        self.rect.center = (self.prev_center[0] + 20, self.prev_center[1])
+                        self.changeFromCenter = (20, 0)
+                        
             else:
                 # When blinking duration has ran through, set image to previous eye sprite and previous rect
                 self.image = self.prev_eye_sprite
-                self.rect = self.image.get_rect(center=self.prev_center)
-      
+                self.rect = self.image.get_rect()
+                
+                # Reset the position of the eyes to use the usual distDict entry
+                self.changeFromCenter = (0,0)
+                          
 class Mouth(pygame.sprite.Sprite):
     """Holds logic for mouth, including sprites and necessary updates."""
     def __init__(self, objName):
@@ -290,6 +296,9 @@ class Mouth(pygame.sprite.Sprite):
         self.absoluteRightOfRect= self.rect.left + self.rect.width
         self.absoluteBottomOfRect = self.rect.top + self.rect.height
         
+        # Used when edits to the normal center of the sprite are needed (i.e. when the sprite image is changed)
+        self.changeFromCenter = (0,0)
+                
     def afterImgUpdate(self, dt, afterImageGroup):
         """
         Specfically updates the after images, so that the Face can correct the face sprites' positions first.
@@ -477,8 +486,8 @@ class Face():
             # Update sprites' positions to go with center
             # TODO: Make sure this accounts for different face sprite changes, like blinking
             for sp in self.faceSprites:
-                # Update the sprite's rect's center to be a constant distance as defined in the distDict
-                sp.rect.center = (self.currPos.x + self.distDict[sp.name][0], self.currPos.y + self.distDict[sp.name][1])
+                # Update the sprite's rect's center to be a constant distance as defined in the distDict + whatever change the sprite image requires
+                sp.rect.center = (self.currPos.x + self.distDict[sp.name][0] + sp.changeFromCenter[0], self.currPos.y + self.distDict[sp.name][1] + sp.changeFromCenter[1])
                     
         # Let all face sprites update their after images after enforcing their positions
         for sp in self.faceSprites:
@@ -584,6 +593,10 @@ def debugVisuals(FaceObj, spriteGroup, afterImageGroup):
     
     # pygame.draw.circle(screen, (192, 255, 0), (screen.get_rect().centerx, 220), 10)
     # pygame.draw.circle(screen, (192, 255, 0), (screen.get_rect().centerx, 260), 10)
+    
+    # for sp in spriteGroup:
+    #     if isinstance(sp, Eye):
+    #         pygame.draw.circle(screen, "blue", sp.rect.center, 10)
                    
     """Print debugging info"""
     screen.blit(text1, (0, 0))
@@ -631,12 +644,12 @@ def main():
         # Attract mode ideas
         if not MainFace.isMoving:
             # Random, slow movement
-            # MainFace.moveTo(random.randint(160, 540), random.randint(80, 400), random.uniform(1.0, 5.0))
+            MainFace.moveTo(random.randint(160, 540), random.randint(80, 400), random.uniform(1.0, 5.0))
             # Sinusoidal movement
-            if(MainFace.currPos.x <= 400):
-                MainFace.moveTo(600, 300, 1.0)
-            else:
-                MainFace.moveTo(200, 300, 1.0)
+            # if(MainFace.currPos.x <= 400):
+            #     MainFace.moveTo(600, 300, 1.0)
+            # else:
+            #     MainFace.moveTo(200, 300, 1.0)
         
         # Update all sprites, including after images
         MainFace.update(deltaT, afterImages)
