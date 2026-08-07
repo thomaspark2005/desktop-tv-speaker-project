@@ -164,9 +164,8 @@ class Eye(pygame.sprite.Sprite):
     blink_duration = 20
     blink_elapsed = 0
         
-    # Load eye sprites and scale them down by 1/2
-    eyeSprite_dot = pygame.transform.scale_by(pygame.image.load("sprites/eyes/eyes_dot.png").convert_alpha(), 0.5)
-    eyeSprite_closedDown = pygame.transform.scale_by(pygame.image.load("sprites/eyes/eyes_closed-down.png").convert_alpha(), 0.5)
+    # All eye objects have access to the spriteImages dictionary which holds ImageContainers for the eyes
+    spriteImages = {}
     
     def __init__(self, objName):
         """
@@ -183,8 +182,13 @@ class Eye(pygame.sprite.Sprite):
         # Sprite layer
         self._layer = 10
                 
+        # Load eye sprites into shared spriteImages dictionary (only needs to run once)
+        if not Eye.spriteImages:
+            Eye.spriteImages = Eye.loadSpriteImages()
+        
         # Set initial sprite of eye, dot
-        self.image = Eye.eyeSprite_dot
+        self.currImageContainer = Eye.spriteImages["dot"]
+        self.image = self.currImageContainer.image
         
         # Set the Rect correctly
         self.rect = self.image.get_rect()
@@ -195,14 +199,55 @@ class Eye(pygame.sprite.Sprite):
         # Initial timer for after images to start spawning
         self.afterImage_timeout = 0
         
-        # Variable to store previous eye sprite 
-        self.prev_eye_sprite = 0
-        
-        # Store previous center of rect before sprite change
-        self.prev_center = (0,0)
+        # Variable to store previous eye sprite image's name
+        self.prev_ImageName = ""
         
         # Used when edits to the normal center of the sprite are needed (i.e. when the sprite image is changed)
         self.changeFromCenter = (0,0)
+        
+    def loadSpriteImages():
+        """
+        Loads images for the Eye object as ImageContainer objects.
+        
+        Returns:
+            Dictionary with keys being the name of the image and the value being the requested ImageContainer
+        """
+        # Eye sprites
+        eyes_dot = ImageContainer("dot", "sprites/eyes/eyes_dot.png", 0.5, (0,0), (0,0), (0,0))
+        eyes_closedDown = ImageContainer("closedDown", "sprites/eyes/eyes_closed-down.png", 0.5, (-20,0), (20,0), (0,0))
+        
+        # Create dictionary to return
+        images = {
+            "dot" : eyes_dot,
+            "closedDown" : eyes_closedDown
+            }
+        
+        return images
+        
+    def setChangeDependingOnEyes(self):
+        """Updates the Eye object's changeFromCenter tuple based on if they are the Left or Right eye"""
+        # Position eyes if depending on which one they are
+        # Change the position the eyes in relation to the usual center calculated at Face initialization
+        if self.name == "LeftEye":
+            self.changeFromCenter = self.currImageContainer.LeftEyeOffset
+        elif self.name == "RightEye":
+            self.changeFromCenter = self.currImageContainer.RightEyeOffset
+        else:
+            # Failsafe in case Eyes are not named LeftEYe or RightEye
+            print("What, do you have a third eye?")
+            
+    def changeImageTo(self, imageName):
+        """
+        Changes self.image to be the requested image and updates the offsets needed for placement.
+        
+        :param imageName: Name of the new image for the Eye sprite
+        """
+        # Load requested ImageContainer and pull info from it
+        self.currImageContainer = Eye.spriteImages[imageName]
+        self.image = self.currImageContainer.image
+        self.rect = self.image.get_rect()
+        # Pull and change offsets
+        self.setChangeDependingOnEyes()
         
     def afterImgUpdate(self, dt, afterImageGroup):
         """
@@ -219,7 +264,7 @@ class Eye(pygame.sprite.Sprite):
                 # How often, in ms, an after image is created
                 self.afterImage_timeout = 25
                 afterImageGroup.add(afterImage(self))
-        
+    
     def update(self, isBlinking):
         """
         Update function which runs each frame.
@@ -227,44 +272,28 @@ class Eye(pygame.sprite.Sprite):
         :param dt: Change in time since last frame
         :param afterImageGroup: Sprite group containing after images for each sprite
         :param isBlinking: Flag which determines whether eye should be blinking
-        """
-        # Bring down global variables
-        global afterImageFlag
-        
+        """ 
         if isBlinking:
             # Check if elapsed blinking time is lesser than blinking duration
             if Eye.blink_elapsed < Eye.blink_duration:
                 
                 # Check if current image is not the blinking eye
-                if self.image is not Eye.eyeSprite_closedDown:
+                if self.image is not Eye.spriteImages["closedDown"].image:
                     
-                    # Save previous center of previous rect and previous eye image
-                    self.prev_center = self.rect.center
-                    self.prev_eye_sprite = self.image
+                    # Store current eye image name to go back to later
+                    self.prev_ImageName = self.currImageContainer.name
                     
-                    # Set image to blinking eye
-                    self.image = Eye.eyeSprite_closedDown
-                    
-                    # Reset rect, position doesn't really matter since it will be corrected
-                    self.rect = self.image.get_rect(center=self.prev_center)
-                    
-                    # Position eyes if depending on which one they are
-                    # Change the position the eyes in relation to the usual center calculated at Face initialization
-                    if self.name == "LeftEye":
-                        self.changeFromCenter = (-20, 0)
-                    else:
-                        self.changeFromCenter = (20, 0)
-                        
+                    # Set image to blinking eye image
+                    self.changeImageTo("closedDown")
             else:
-                # When blinking duration has ran through, set image to previous eye sprite and previous rect
-                self.image = self.prev_eye_sprite
-                self.rect = self.image.get_rect()
-                
-                # Reset the position of the eyes to use the usual distDict entry
-                self.changeFromCenter = (0,0)
+                # When blinking duration has ran through, set image to previous eye sprite,  previous rect, and previous offsets
+                self.changeImageTo(self.prev_ImageName)
                           
 class Mouth(pygame.sprite.Sprite):
     """Holds logic for mouth, including sprites and necessary updates."""
+    
+    spriteImages = {}
+    
     def __init__(self, objName):
         """
         Constructor for Mouth object.
@@ -280,11 +309,11 @@ class Mouth(pygame.sprite.Sprite):
         # Sprite layer 
         self._layer = 10
         
-        # Load mouth sprites and scale down
-        self.mouthSprite_D =  pygame.transform.scale_by(pygame.image.load("sprites/mouth/mouth_D.png").convert_alpha(), 0.5)
+        # Load mouth sprites
+        Mouth.spriteImages = Mouth.loadSpriteImages()
         
         # Set initial sprite of mouth, D shape
-        self.image = self.mouthSprite_D
+        self.image = Mouth.spriteImages["D"].image
                        
         # Set the Rect correctly
         self.rect = self.image.get_rect()
@@ -293,12 +322,42 @@ class Mouth(pygame.sprite.Sprite):
         self.afterImage_timeout = 0
         
         # Extra data to get the right and bottom of the rect based in relation to the screen
-        self.absoluteRightOfRect= self.rect.left + self.rect.width
-        self.absoluteBottomOfRect = self.rect.top + self.rect.height
+        # self.absoluteRightOfRect= self.rect.left + self.rect.width
+        # self.absoluteBottomOfRect = self.rect.top + self.rect.height
         
         # Used when edits to the normal center of the sprite are needed (i.e. when the sprite image is changed)
         self.changeFromCenter = (0,0)
                 
+    def loadSpriteImages():
+        """
+        Loads images for the Mouth object as ImageContainer objects.
+        
+        Returns:
+            Dictionary with keys being the name of the image and the value being the requested ImageContainer
+        """
+        # Mouth sprites
+        mouth_D = ImageContainer("D", "sprites/mouth/mouth_D.png", 0.5, (0,0), (0,0), (0,0))
+        
+        # Create dictionary to return
+        images = {
+            "D" : mouth_D
+            }
+        
+        return images 
+    
+    def changeImageTo(self, imageName):
+        """
+        Changes self.image to be the requested image and updates the offsets needed for placement.
+        
+        :param imageName: Name of the new image for the Mouth sprite
+        """
+        # Load requested ImageContainer and pull info from it
+        self.currImageContainer = Mouth.spriteImages[imageName]
+        self.image = self.currImageContainer.image
+        self.rect = self.image.get_rect()
+        # Pull and change offsets
+        self.changeFromCenter = self.currImageContainer.MouthOffset
+        
     def afterImgUpdate(self, dt, afterImageGroup):
         """
         Specfically updates the after images, so that the Face can correct the face sprites' positions first.
@@ -324,6 +383,64 @@ class Mouth(pygame.sprite.Sprite):
         """
         # print("Erm... what the scallop???")
     
+class ImageContainer():
+    """
+    Contains both an image for a sprite and its associated offsets from the center.
+        
+    These containers should not have duplicates.
+    
+    Instance variables:
+        - name (string)
+        - spriteImage (pygame.image)
+        - LeftEyeOffset  (x,y tuple)
+        - RightEyeOffset (x,y tuple)
+        - MouthOffset (x,y tuple)
+    """
+    def __init__(self, objName, imagePathname, scaleAmt, leftTuple, rightTuple, mouthTuple):
+        """
+        Constructor for ImageContainer object.
+        
+        :param objName: Name of this container; i.e. the name of the image
+        :param imagePathname: Where sprite's image is located in the files
+        :param scaleAmt: How 
+        """
+        # Set name
+        self.name = objName
+        # Try to load image found in source
+        try:
+            self.image = pygame.transform.scale_by(pygame.image.load(imagePathname).convert_alpha(), scaleAmt)
+        except pygame.error as e:
+            # If we get an error, print error message and quit program
+            print("Error! Pygame details: " + str(e))
+            pygame.quit()
+            sys.exit()
+        # Offsets
+        self.LeftEyeOffset = leftTuple
+        self.RightEyeOffset = rightTuple
+        self.MouthOffset = mouthTuple
+        
+    def updateScaleAmount(self, scaleAmt):
+        """
+        Sets scale for sprite image.
+        
+        :param leftTuple: New offset for the LeftEye
+        :param rightTuple: New offset for the RightEye
+        :param mouthTuple: New offset for Mouth
+        """
+        self.spriteImage = pygame.transform.scale_by(self.spriteImage, scaleAmt)
+    
+    def updateOffsets(self, leftTuple, rightTuple, mouthTuple):
+        """
+        Sets offsets for sprite image.
+        
+        :param leftTuple: New offset for the LeftEye
+        :param rightTuple: New offset for the RightEye
+        :param mouthTuple: New offset for Mouth
+        """
+        self.LeftEyeOffset = leftTuple
+        self.RightEyeOffset = rightTuple
+        self.MouthOffset = mouthTuple
+
 class Face():
     """
     Main object of the screen.
@@ -386,7 +503,7 @@ class Face():
         # For each sprite in the group, calculate its distance to the center of the face, then update the dictionary
         for sp in self.faceSprites:
             self.distDict.update({sp.name: self.calculateCenterDistance(sp)})
-                          
+        
     def calculateCenterDistance(self, faceSprite):
         """
         Calculates distance from a given faceSprite's rect's center to the center of the face, returns a tuple of distances in the x and y axes.
@@ -484,7 +601,6 @@ class Face():
                 self.isMoving = False
                 
             # Update sprites' positions to go with center
-            # TODO: Make sure this accounts for different face sprite changes, like blinking
             for sp in self.faceSprites:
                 # Update the sprite's rect's center to be a constant distance as defined in the distDict + whatever change the sprite image requires
                 sp.rect.center = (self.currPos.x + self.distDict[sp.name][0] + sp.changeFromCenter[0], self.currPos.y + self.distDict[sp.name][1] + sp.changeFromCenter[1])
