@@ -50,6 +50,13 @@ text3 = pygame.surface.Surface((0,0))
 
 afterImageFlag = True
 
+changeLeftEye = False
+changeRightEye = False
+changeMouth = False
+LeftEyeNum = 0
+RightEyeNum = 0
+MouthNum = 0
+
 # =============================================================================
 # Classes
 # =============================================================================
@@ -63,7 +70,6 @@ class afterImage(pygame.sprite.Sprite):
 
         :param source: a sprite from which an after image is created
         """
-        
         # Initialize pygame sprite
         super().__init__()
         
@@ -105,7 +111,6 @@ class afterImage(pygame.sprite.Sprite):
         
 class TestFaceObj(pygame.sprite.Sprite):
     """An object to test what the face should look like in various states."""
-    
     def __init__(self):
         """Constructor for test object."""
         
@@ -157,8 +162,6 @@ class TestFaceObj(pygame.sprite.Sprite):
 
 class Eye(pygame.sprite.Sprite):
     """Holds logic for eyes, including sprites, blinking, and necessary updates."""
-    
-    # Class shared variables
     
     # Blinking variables
     blink_duration = 20
@@ -213,13 +216,18 @@ class Eye(pygame.sprite.Sprite):
             Dictionary with keys being the name of the image and the value being the requested ImageContainer
         """
         # Eye sprites
+        # .
         eyes_dot = ImageContainer("dot", "sprites/eyes/eyes_dot.png", 0.5, (0,0), (0,0), (0,0))
+        # u
         eyes_closedDown = ImageContainer("closedDown", "sprites/eyes/eyes_closed-down.png", 0.5, (-20,0), (20,0), (0,0))
+        # ^
+        eyes_closedUp = ImageContainer("closedUp", "sprites/eyes/eyes_closed-up.png", 0.5, (-20,0), (20,0), (0,0))
         
         # Create dictionary to return
         images = {
             "dot" : eyes_dot,
-            "closedDown" : eyes_closedDown
+            "closedDown" : eyes_closedDown,
+            "closedUp" : eyes_closedUp
             }
         
         return images
@@ -273,6 +281,7 @@ class Eye(pygame.sprite.Sprite):
         :param afterImageGroup: Sprite group containing after images for each sprite
         :param isBlinking: Flag which determines whether eye should be blinking
         """ 
+        # Blinking operation
         if isBlinking:
             # Check if elapsed blinking time is lesser than blinking duration
             if Eye.blink_elapsed < Eye.blink_duration:
@@ -288,6 +297,24 @@ class Eye(pygame.sprite.Sprite):
             else:
                 # When blinking duration has ran through, set image to previous eye sprite,  previous rect, and previous offsets
                 self.changeImageTo(self.prev_ImageName)
+                
+        # TODO: Debug feature
+        global changeLeftEye, changeRightEye, LeftEyeNum, RightEyeNum
+        if changeLeftEye and (self.name == "LeftEye"):
+            LeftEyeNum += 1
+            if LeftEyeNum > 2:
+                LeftEyeNum = 0
+            newEye = list(Eye.spriteImages.values())[LeftEyeNum]
+            self.changeImageTo(newEye.name)
+            changeLeftEye = False
+            
+        if changeRightEye and (self.name == "RightEye"):
+            RightEyeNum += 1
+            if RightEyeNum > 2:
+                RightEyeNum = 0
+            newEye = list(Eye.spriteImages.values())[RightEyeNum]
+            self.changeImageTo(newEye.name)
+            changeRightEye = False
                           
 class Mouth(pygame.sprite.Sprite):
     """Holds logic for mouth, including sprites and necessary updates."""
@@ -321,10 +348,6 @@ class Mouth(pygame.sprite.Sprite):
         # Initial timer for after images to start spawning
         self.afterImage_timeout = 0
         
-        # Extra data to get the right and bottom of the rect based in relation to the screen
-        # self.absoluteRightOfRect= self.rect.left + self.rect.width
-        # self.absoluteBottomOfRect = self.rect.top + self.rect.height
-        
         # Used when edits to the normal center of the sprite are needed (i.e. when the sprite image is changed)
         self.changeFromCenter = (0,0)
                 
@@ -337,10 +360,18 @@ class Mouth(pygame.sprite.Sprite):
         """
         # Mouth sprites
         mouth_D = ImageContainer("D", "sprites/mouth/mouth_D.png", 0.5, (0,0), (0,0), (0,0))
+        mouth_O = ImageContainer("O", "sprites/mouth/mouth_O.png", 0.5, (0,0), (0,0), (0,0))
+        mouth_Zero = ImageContainer("zero", "sprites/mouth/mouth_Zero.png", 0.5, (0,0), (0,0), (0,0))
+        mouth_dot = ImageContainer("dot", "sprites/mouth/mouth_dot.png", 0.5, (0,0), (0,0), (0,0))
+        mouth_smileClosed = ImageContainer("smileClosed", "sprites/mouth/mouth_(.png", 0.5, (0,0), (0,0), (0,0))
         
         # Create dictionary to return
         images = {
-            "D" : mouth_D
+            "D" : mouth_D,
+            "O" : mouth_O,
+            "zero" : mouth_Zero,
+            "dot" : mouth_dot,
+            "smileClosed" : mouth_smileClosed
             }
         
         return images 
@@ -381,7 +412,15 @@ class Mouth(pygame.sprite.Sprite):
         :param afterImageGroup: Sprite group containing after images for each sprite
         :param isBlinking: Unused here
         """
-        # print("Erm... what the scallop???")
+        # TODO: Debug feature
+        global changeMouth, MouthNum
+        if changeMouth:
+            MouthNum += 1
+            if MouthNum > 4:
+                MouthNum = 0
+            newEye = list(Mouth.spriteImages.values())[MouthNum]
+            self.changeImageTo(newEye.name)
+            changeMouth = False
     
 class ImageContainer():
     """
@@ -565,7 +604,7 @@ class Face():
         :param afterImageSpriteGroup: Sprite group containing after images for each sprite
         """
         # Blink animation, run if random number roll succeeds, if face is not blinking, and if the face is in a neutral state
-        if (random.randint(0, 100) == 0) and (not self.isBlinking) and (self.faceState == 0):
+        if (random.randint(0, 100) == 0) and (not self.isBlinking) and (self.faceState == 10):
             self.isBlinking = True
             Eye.blink_timer = 0
             
@@ -751,11 +790,28 @@ def main():
                 gameIsOn = False
                 
             # TODO: Change this to not be debuggy
-            # If spacebar is pressed, randomly change the destination of the face
+            # TODO: Key strokes will be changed to be reading from pins on the RaspPy
             if e.type == pygame.KEYDOWN:
+                # If spacebar is pressed, randomly change the destination of the face
                 if e.key == pygame.K_SPACE:
                     MainFace.setDestination(random.randint(160, 540), random.randint(80, 400))
                     MainFace.startMoving()
+                    
+                # TODO: This is just for fun, delete later
+                
+                global changeLeftEye
+                global changeRightEye
+                global changeMouth
+                
+                # Use i to change LeftEye sprite
+                if e.key == pygame.K_i:
+                    changeLeftEye = True
+                # Use o to change RightEye sprite
+                if e.key == pygame.K_o:
+                    changeRightEye = True
+                # Use p to change Mouth sprite
+                if e.key == pygame.K_p:
+                    changeMouth = True
         
         # Attract mode ideas
         if not MainFace.isMoving:
